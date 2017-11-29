@@ -27,18 +27,19 @@ prompt.get([{
                 directory: result.directory || DIR,
                 cookie: config.cookie,
             }
-            download(result.book, 1, option);
+            download(result.book, 1, option, 'svg');
         });
     }
 })
 
-function download(id, index, option = {}) {
+function download(id, index, option = {}, format) {
     let fs = require('fs')
     let cmd = require('node-command-line')
     let https = require('https')
     let mkdirp = require('mkdirp')
     let url = require('url')
-    let file = `https://saplearninghub.plateau.com/icontent_e/CUSTOM_eu/sap/self-managed/ebook/${id}/xml/topic${index}.svg`
+    let file = ( format === 'svg' ) ? `https://saplearninghub.plateau.com/icontent_e/CUSTOM_eu/sap/self-managed/ebook/${id}/xml/topic${index}.svg`
+        : `https://saplearninghub.plateau.com/icontent_e/CUSTOM_eu/sap/self-managed/Handbook/${id}/files/assets/mobile/pages/page${String(`0000${index}`).slice(-4)}_i2.${format}`
     let httpOption = {
         hostname: url.parse(file).hostname,
         port: '443',
@@ -55,28 +56,43 @@ function download(id, index, option = {}) {
         // Prepare common file
         fs.writeFile(`${option.directory}/style.css`, `@page { size: A4; margin: 0px; padding: 0px; }`, 'utf8', function () {
         })
-        fs.writeFile(`${option.directory}/${id}.html`, `<html><body>`, 'utf8', function () {
+        fs.writeFile(`${option.directory}/${id.split('/').pop()}.html`, `<html><body>`, 'utf8', function () {
         })
     }
 
-    let path = `${option.directory}/topic${index}.svg`
+    let path = `${option.directory}/topic${index}.${format}`
     let request = https.get(httpOption, function (response) {
         if (response.statusCode === 200) {
             mkdirp(option.directory, function (err) {
                 if (err) throw err
                 var file = fs.createWriteStream(path);
                 response.pipe(file) // Save svg file
-                fs.appendFile(`${option.directory}/${id}.html`, `<object data="topic${index}.svg" type="image/svg+xml"></object>`, 'utf8', function () {
+                fs.appendFile(
+                    `${option.directory}/${id.split('/').pop()}.html`,
+                    format === 'svg' ? `<object data="topic${index}.${format}" type="image/svg+xml"></object>`
+                                     : `<img src="topic${index}.${format}" width="100%" height="100%">`,
+                    'utf8',
+                    function () {
+                    }
+                )
+                process.stdout.write("Downloading..." + index + "\r")
+                download(id, ++index, option, format)
+            })
+        } else if (response.statusCode === 300) { // Multiple choices
+            download(id, index, option, format === 'jpg' ? 'png' : 'jpg')
+        } else if (response.statusCode === 404) { // Not found
+            if (index === 1 && format === 'svg') { // If false with SVG format, try again with JPG
+                console.log(`Cannot find this book ID with SVG format. Retrying with JPG...`)
+                download(id, index, option, 'jpg')
+            } else if (index === 1 && format != 'svg') {
+                console.log(`Wrong book ID!`)
+            } else {
+                console.log(`Finish! Total page: ${index - 1}`)
+                console.log(`Start building PDF`)
+                fs.appendFile(`${option.directory}/${id}.html`, `</body></html>`, 'utf8', function () {
                 })
-                process.stdout.write("Downloading..." + index + "\r");
-                download(id, ++index, option)
-            })
-        } else if (response.statusCode === 404) {
-            console.log(`Finish! Total page: ${index - 1}`)
-            console.log(`Start building PDF`)
-            fs.appendFile(`${option.directory}/${id}.html`, `</body></html>`, 'utf8', function () {
-            })
-            cmd.run(`prince -s ${option.directory}/style.css ${option.directory}/${id}.html`)
+                cmd.run(`prince -s ${option.directory}/style.css ${option.directory}/${id.split('/').pop()}.html`)
+            }
         } else if (response.statusCode === 302) {
             console.log(`Please update cookie by Option 1`)
         } else {
@@ -93,7 +109,7 @@ function download(id, index, option = {}) {
 }
 
 function login() {
-    const LOGIN_LINK = "https://performancemanager.successfactors.eu/sf/learning?Treat-As=WEB&bplte_company=learninghub&_s.crb=EttEXYlbRg7NM9gE%2bsngyhSFmRw%3ds4c40";
+    const LOGIN_LINK = "https://saplearninghub.plateau.com/learning/user/deeplink_redirect.jsp?linkId=HOME_PAGE&fromSF=Y&_s.crb=NOTmiNhThBHs4X%252fxmlNEbR8hW1w%253d"
 
     console.log('Just wait...Chrome will get cookie and close by itself')
     let fs = require('fs');
@@ -101,7 +117,7 @@ function login() {
         By = webdriver.By,
         until = webdriver.until;
     let chromeCapabilities = webdriver.Capabilities.chrome().set('chromeOptions', {
-        'args': ['--incognito']
+        'args': ['--incognito', 'headless']
     });
     let driver = new webdriver.Builder()
         .forBrowser('chrome')
@@ -112,17 +128,13 @@ function login() {
     driver.get(LOGIN_LINK);
     driver.findElement(By.xpath("//input[@name='idpName' and @value='Click continue to proceed to the SAP Learning Platform']")).click();
     driver.findElement(By.id('subBtn')).click();
-    driver.findElement(By.name('j_username')).sendKeys(config.username);
-    driver.findElement(By.name('j_password')).sendKeys(config.password);
+    driver.findElement(By.id('j_username')).sendKeys(config.username);
+    driver.findElement(By.id('j_password')).sendKeys(config.password);
     driver.findElement(By.id('logOnFormSubmit')).click();
-    driver.wait(until.elementLocated(By.name('iframelearning')));
-    driver.switchTo().frame(driver.findElement(By.name('iframelearning')));
-    driver.wait(until.elementLocated(By.name('keywords')));
-    driver.navigate().to('https://saplearninghub.plateau.com/learning/user/onlineaccess/icontent.do?Course=CUSTOM_eu&url=/self-managed/ebook/GW100_EN_Col15_R1.1/index.html');
-    driver.wait(until.elementLocated(By.id('searchField')));
     driver.manage().getCookies().then(function (cookies) {
         for (let cookie of cookies) {
             if (cookie.name === 'AKAMAI_AUTH_COOKIE') {
+                console.log(cookie.value)
                 config.cookie = cookie.value;
                 fs.writeFile('config.json', JSON.stringify(config), 'utf8', function () {
                     console.log('Cookie updated!')
