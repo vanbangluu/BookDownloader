@@ -11,24 +11,27 @@ prompt.get([{
     if (result.select === '1') {
         login()
     } else if (result.select === '2') {
-        prompt.get([{
-            name: 'book',
-            description: 'Book',
-            required: true
-        },
-            {
-                name: 'directory',
-                description: 'Save to',
-                required: true
-            }], function (err, result) {
-            let fs = require('fs');
-            let config = JSON.parse(fs.readFileSync('config.json'))
-            let option = {
-                directory: result.directory || DIR,
-                cookie: config.cookie,
-            }
-            download(result.book, 1, option, 'svg');
-        });
+        prompt.get(
+            [
+                {
+                    name: 'book',
+                    description: 'Book',
+                    required: true
+                },
+                {
+                    name: 'directory',
+                    description: 'Save to',
+                    required: true
+                }
+            ], function (err, result) {
+                let fs = require('fs');
+                let config = JSON.parse(fs.readFileSync('config.json'))
+                let option = {
+                    directory: result.directory || DIR,
+                    cookie: config.cookie,
+                }
+                download(result.book, 1, option, 'svg');
+            });
     }
 })
 
@@ -70,7 +73,7 @@ function download(id, index, option = {}, format) {
                 fs.appendFile(
                     `${option.directory}/${id.split('/').pop()}.html`,
                     format === 'svg' ? `<object data="topic${index}.${format}" type="image/svg+xml"></object>`
-                                     : `<img src="topic${index}.${format}" width="100%" height="100%">`,
+                        : `<img src="topic${index}.${format}" width="100%" height="100%">`,
                     'utf8',
                     function () {
                     }
@@ -117,7 +120,7 @@ function login() {
         By = webdriver.By,
         until = webdriver.until;
     let chromeCapabilities = webdriver.Capabilities.chrome().set('chromeOptions', {
-        'args': ['--incognito', 'headless']
+        'args': ['--incognito']
     });
     let driver = new webdriver.Builder()
         .forBrowser('chrome')
@@ -134,10 +137,9 @@ function login() {
     driver.manage().getCookies().then(function (cookies) {
         for (let cookie of cookies) {
             if (cookie.name === 'AKAMAI_AUTH_COOKIE') {
-                console.log(cookie.value)
                 config.cookie = cookie.value;
                 fs.writeFile('config.json', JSON.stringify(config), 'utf8', function () {
-                    console.log('Cookie updated!')
+                    console.log('AKAMAI Cookie updated!')
                 });
             }
         }
