@@ -1,5 +1,3 @@
-const DIR = '/Users/vietdht/Downloads/Books'
-
 let prompt = require('prompt');
 prompt.start();
 prompt.get([{
@@ -114,32 +112,44 @@ function download(id, index, option = {}, format) {
 function login() {
     const LOGIN_LINK = "https://saplearninghub.plateau.com/learning/user/deeplink_redirect.jsp?linkId=HOME_PAGE&fromSF=Y&_s.crb=NOTmiNhThBHs4X%252fxmlNEbR8hW1w%253d"
 
-    console.log('Just wait...Chrome will get cookie and close by itself')
+    let spinner = require('cli-spinner').Spinner('Please wait...');
     let fs = require('fs');
     let webdriver = require('selenium-webdriver'),
         By = webdriver.By,
         until = webdriver.until;
-    let chromeCapabilities = webdriver.Capabilities.chrome().set('chromeOptions', {
-        'args': ['--incognito']
-    });
+    let firefox = require('selenium-webdriver/firefox')
+    let options = new firefox.Options().addArguments('--headless')
     let driver = new webdriver.Builder()
-        .forBrowser('chrome')
-        .withCapabilities(chromeCapabilities)
+        .forBrowser('firefox')
+        .setFirefoxOptions(options)
         .build();
 
-    let config = JSON.parse(fs.readFileSync('config.JSON'));
+    // let chromeCapabilities = webdriver.Capabilities.chrome().set('chromeOptions', {
+    //     'args': ['--incognito']
+    // });
+    // let driver = new webdriver.Builder()
+    //     .forBrowser('chrome')
+    //     .withCapabilities(chromeCapabilities)
+    //     .build();
+
+    spinner.setSpinnerString('◐◓◑◒');
+    spinner.start();
+
+    let config = JSON.parse(fs.readFileSync('config.JSON'))
     driver.get(LOGIN_LINK);
-    driver.findElement(By.xpath("//input[@name='idpName' and @value='Click continue to proceed to the SAP Learning Platform']")).click();
-    driver.findElement(By.id('subBtn')).click();
-    driver.findElement(By.id('j_username')).sendKeys(config.username);
-    driver.findElement(By.id('j_password')).sendKeys(config.password);
-    driver.findElement(By.id('logOnFormSubmit')).click();
+    driver.findElement(By.xpath("//input[@name='idpName' and @value='Click continue to proceed to the SAP Learning Platform']")).click()
+    driver.findElement(By.id('subBtn')).click()
+    driver.findElement(By.id('j_username')).sendKeys(config.username)
+    driver.findElement(By.id('j_password')).sendKeys(config.password)
+    driver.findElement(By.id('logOnFormSubmit')).click()
+    driver.wait(until.elementLocated(By.name('keywords')))
     driver.manage().getCookies().then(function (cookies) {
         for (let cookie of cookies) {
             if (cookie.name === 'AKAMAI_AUTH_COOKIE') {
                 config.cookie = cookie.value;
                 fs.writeFile('config.json', JSON.stringify(config), 'utf8', function () {
-                    console.log('AKAMAI Cookie updated!')
+                    spinner.stop(true)
+                    console.log('Cookie is up-to-date')
                 });
             }
         }
